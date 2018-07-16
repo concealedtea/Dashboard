@@ -1,0 +1,8 @@
+C:\Users\Julius\Desktop\RevenueChart\Dev\Dev\bin\Debug\Dev.exe.config
+C:\Users\Julius\Desktop\RevenueChart\Dev\Dev\bin\Debug\Dev.exe
+C:\Users\Julius\Desktop\RevenueChart\Dev\Dev\bin\Debug\Dev.pdb
+C:\Users\Julius\Desktop\RevenueChart\Dev\Dev\bin\Debug\Newtonsoft.Json.dll
+C:\Users\Julius\Desktop\RevenueChart\Dev\Dev\bin\Debug\Newtonsoft.Json.xml
+C:\Users\Julius\Desktop\RevenueChart\Dev\Dev\obj\Debug\Dev.csprojResolveAssemblyReference.cache
+C:\Users\Julius\Desktop\RevenueChart\Dev\Dev\obj\Debug\Dev.exe
+C:\Users\Julius\Desktop\RevenueChart\Dev\Dev\obj\Debug\Dev.pdb

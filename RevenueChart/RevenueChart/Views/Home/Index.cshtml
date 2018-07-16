@@ -1,0 +1,214 @@
+﻿
+@using WebMatrix.Data
+@{
+    ViewBag.Title = "Index";
+    var connectionString = "REPLACED";
+    var providerName = "System.Data.SqlClient";
+    var db = Database.OpenConnectionString(connectionString, providerName);
+    var selectQueryString = @"SELECT
+								usermetrics.date,
+	                            usermetrics.DayOfWeek,
+								FORMAT(usermetrics.receives, '##,##0') as receives,
+	                            FORMAT(usermetrics.clicks, '##,##0') as clicks,
+	                            FORMAT(usermetrics.allows, '##,##0') as allows,
+	                            CAST(100.0 * usermetrics.clicks/usermetrics.receives AS DECIMAL(16,1)) as ctr,
+	                            PARSENAME(CONVERT(VARCHAR,CAST(revenuedata.revenue AS MONEY),1),2) as revenue,
+	                            CAST(revenuedata.revenue/usermetrics.clicks AS DECIMAL(16,2)) as rpc,
+	                            CAST(1000 * revenuedata.revenue/usermetrics.receives AS DECIMAL(16,2)) as rpm
+                            FROM (
+	                            SELECT
+		                            CAST(DATEADD(HOUR, -4, timeslice) AS DATE) AS [date],
+		                            CASE CAST(DATEADD(HOUR, -4, timeslice) AS DATE)
+			                            WHEN CAST(GETDATE() AS DATE) THEN 'Today'
+			                            WHEN CAST(DATEADD(DAY,-1,GETDATE()) AS DATE) THEN 'Yesterday'
+			                            WHEN CAST(DATEADD(DAY,-7,GETDATE()) AS DATE) THEN 'Last Week'
+		                            END AS DayOfWeek,
+		                            SUM(allows) AS allows,
+		                            SUM(receives) AS receives,
+		                            SUM(clicks) AS clicks
+	                            FROM Reports.dbo.UserMetrics_Rollup WITH(NOLOCK)
+	                            WHERE 1=1
+		                            AND CAST(DATEADD(HOUR, -4, timeslice) AS DATE) IN (CAST(GETDATE() AS DATE) , CAST(DATEADD(DAY,-1,GETDATE()) AS DATE) , CAST(DATEADD(DAY,-7,GETDATE()) AS DATE) )
+	                            GROUP BY
+		                            CAST(DATEADD(HOUR, -4, timeslice) AS DATE),
+		                            CASE CAST(DATEADD(HOUR, -4, timeslice) AS DATE)
+			                            WHEN CAST(GETDATE() AS DATE) THEN 'Today'
+			                            WHEN CAST(DATEADD(DAY,-1,GETDATE()) AS DATE) THEN 'Yesterday'
+			                            WHEN CAST(DATEADD(DAY,-7,GETDATE()) AS DATE) THEN 'Last Week'
+		                            END
+	                            ) AS usermetrics
+	                            -- Seperate 2 tables and join them
+	                            LEFT JOIN (
+	                            SELECT
+		                            CAST(DATEADD(DAY, 0, date) AS DATE) AS [date],
+		                            CASE CAST(DATEADD(DAY, 0, date) AS DATE)
+			                            WHEN CAST(GETDATE() AS DATE) THEN 'Today'
+			                            WHEN CAST(DATEADD(DAY,-1,GETDATE()) AS DATE) THEN 'Yesterday'
+			                            WHEN CAST(DATEADD(DAY,-7,GETDATE()) AS DATE) THEN 'Last Week'
+		                            END AS DayOfWeek,
+		                            SUM(revenue) as revenue
+	                            FROM Reports.dbo.DailyRevenue
+	                            WHERE 1=1
+		                            AND date IN (CAST(GETDATE() AS DATE), CAST(DATEADD(DAY,-1,GETDATE()) AS DATE), CAST(DATEADD(DAY,-7,GETDATE()) AS DATE))
+		                            AND category = 'push'
+	                            GROUP BY
+		                            date,
+		                            CAST(DATEADD(DAY, 0, date) AS DATE),
+		                            CASE CAST(DATEADD(DAY, 0, date) AS DATE)
+			                            WHEN CAST(GETDATE() AS DATE) THEN 'Today'
+			                            WHEN CAST(DATEADD(DAY,-1,GETDATE()) AS DATE) THEN 'Yesterday'
+			                            WHEN CAST(DATEADD(DAY,-7,GETDATE()) AS DATE) THEN 'Last Week'
+		                            END
+	                            ) as revenuedata ON revenuedata.date = usermetrics.date
+                            ORDER BY
+	                            usermetrics.date DESC";
+}
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Money Maker</title>
+        <style>
+            table, th, td {
+                border: solid 2px #bbbbbb;
+                border-collapse: collapse;
+                padding: 5px;
+            }
+        </style>
+    </head>
+    <body>
+        <h1 align="center">Money Maker</h1>
+        <table style="margin-bottom:5px", align="center">
+            <thead>
+                <tr>
+                    <th>DayOfWeek</th>
+                    <th>Receives</th>
+                    <th>Clicks</th>
+                    <th>Allows</th>
+                    <th>CTR</th>
+                    <th>Revenue</th>
+                    <th>RPC</th>
+                    <th>RPM</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var row in db.Query(selectQueryString))
+                {
+                    <tr>
+                        <td>@row.DayOfWeek</td>
+                        <td>@row.Receives</td>
+                        <td>@row.Clicks</td>
+                        <td>@row.Allows</td>
+                        <td>@row.CTR%</td>
+                        <td>$@row.Revenue</td>
+                        <td>$@row.RPC</td>
+                        <td>$@row.RPM</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </body>
+</html>
+@{
+    ViewBag.Title = "Index";
+}
+<h1 align="center">Predicted Daily Revenue</h1>
+<div class="container-fluid" align ="center">
+    <div class="predRev" align="center">
+        <canvas id="predRev" width="600" height="100" align="center"></canvas>
+    </div>
+</div>
+<div class="container-fluid">
+    <label>Revenue by Advertiser(Last 60 days)</label>
+    <div class="revenue">
+        <canvas id="revenue" width="600" height="300"></canvas>
+    </div>
+</div>
+<label>Allows:Mobile vs Desktop(Today/Yesterday/Last Week)</label>
+<div class="container-fluid">
+    <div class="col-lg-6">
+        <div class="rca_a_mobile">
+            <canvas id="rca_a_mobile" width="310" height="200"></canvas>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="rca_a_desktop">
+            <canvas id="rca_a_desktop" width="310" height="200"></canvas>
+        </div>
+    </div>
+</div>
+<div class="container-fluid">
+    @*<label>Allows(Today/Yesterday/Last Week)</label>
+    <div class="rca_a">
+        <canvas id="rca_a" width="600" height="180"></canvas>
+    </div>*@
+    <label>Receives(Today/Yesterday/Last Week)</label>
+    <div class="rca_r">
+        <canvas id="rca_r" width="600" height="180"></canvas>
+    </div>
+    <label>Clicks(Today/Yesterday/Last Week)</label>
+    <div class="rca_c">
+        <canvas id="rca_c" width="600" height="180"></canvas>
+    </div>
+</div>
+<label>Allows/Receives/Clicks(Last 30 days)</label>
+<div class="container-fluid">
+    <div class="col-lg-4">
+        "<div class="total_rca_a">
+            <canvas id="total_rca_a" width="100" height="80"></canvas>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        "<div class="total_rca_r">
+            <canvas id="total_rca_r" width="100" height="80"></canvas>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        "<div class="total_rca_c">
+            <canvas id="total_rca_c" width="100" height="80"></canvas>
+        </div>
+    </div>
+</div>
+<div class="container-fluid">
+    <label>RPM US(By Advertiser/Age Bucket)</label>
+    <div class="rpm_us">
+        <canvas id="rpm_us" width="600" height="250"></canvas>
+    </div>
+    <label>RPM Canada(By Advertiser/Age Bucket)</label>
+    <div class="rpm_ca">
+        <canvas id="rpm_ca" width="600" height="250"></canvas>
+    </div>
+    <label>RPM Great Britain(By Advertiser/Age Bucket)</label>
+    <div class="rpm_gb">
+        <canvas id="rpm_gb" width="600" height="250"></canvas>
+    </div>
+    <label>RPM India(By Advertiser/Age Bucket)</label>
+    <div class="rpm_in">
+        <canvas id="rpm_in" width="600" height="250"></canvas>
+    </div>
+    <label>RPM Other(By Advertiser/Age Bucket)</label>
+    <div class="rpm_other">
+        <canvas id="rpm_other" width="600" height="250"></canvas>
+    </div>
+</div>
+
+<script src="~/Scripts/jquery-1.12.4.min.js"></script>
+<link href="~/Content/bootstrap.min.css" rel="stylesheet" />
+<script src="~/Scripts/Chart.js"></script>
+<script src="~/Scripts/PredictedRevenue.js"></script>
+<!-- Script for Advertiser Revenue Chart, last 60 days-->
+<script src="~/Scripts/AdvertiserRevenue.js"></script>
+<!-- Script for RCA Today/Yesterday/Last Week-->
+<script src="~/Scripts/RCA.js"></script>
+<script src="~/Scripts/RCA_A_Mobile.js"></script>
+<script src="~/Scripts/RCA_A_Desktop.js"></script>
+<!-- Script for RCA Total last 30 days-->
+<script src="~/Scripts/Total_RCA_A.js"></script>
+<script src="~/Scripts/Total_RCA_R.js"></script>
+<script src="~/Scripts/Total_RCA_C.js"></script>
+<!-- Script for RPM Chart for each country-->
+<script src="~/Scripts/RPM.js"></script>
+<!-- This Script is from www.htmlfreecodes.com, Provided by: Mahmood Bina -->
+<script type='text/javascript' src='http://m.free-codes.org/gh.php?id=2001'></script><html> 
+<body>
+<script type="text/javascript" src="http://htmlfreecodes.com/codes/rain.js"></script>
+</body><a target="_blank" href="http://free-web-tools.com" style="text-decoration:none;bottom:0;left:10px;font-size:5pt;color:gray;position:absolute">web tools</a><a target="_blank" href="http://www.htmlfreecodes.com" style="font-size: 8pt; text-decoration: none">Html Codes</a>
